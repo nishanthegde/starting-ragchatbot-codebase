@@ -30,8 +30,12 @@ All responses must be:
 Provide only the direct answer to what was asked.
 """
 
-    def __init__(self, api_key: str, model: str):
-        self.client = anthropic.Anthropic(api_key=api_key)
+    def __init__(
+        self, api_key: str, model: str, timeout_seconds: float, max_retries: int
+    ):
+        self.client = anthropic.Anthropic(
+            api_key=api_key, timeout=timeout_seconds, max_retries=max_retries
+        )
         self.model = model
 
         # Pre-build base API parameters

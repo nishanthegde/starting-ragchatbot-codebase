@@ -2,6 +2,8 @@ import warnings
 
 warnings.filterwarnings("ignore", message="resource_tracker: There appear to be.*")
 
+import asyncio
+import anthropic
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -69,9 +71,28 @@ async def query_documents(request: QueryRequest):
             session_id = rag_system.session_manager.create_session()
 
         # Process query using RAG system
-        answer, sources = rag_system.query(request.query, session_id)
+        answer, sources = await asyncio.wait_for(
+            asyncio.to_thread(rag_system.query, request.query, session_id),
+            timeout=config.QUERY_TIMEOUT_SECONDS,
+        )
 
         return QueryResponse(answer=answer, sources=sources, session_id=session_id)
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail=(
+                "The request timed out while generating a response. "
+                "Please try again."
+            ),
+        )
+    except anthropic.APITimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail=(
+                "The AI provider timed out while generating a response. "
+                "Please try again."
+            ),
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

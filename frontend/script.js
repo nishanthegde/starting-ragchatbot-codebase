@@ -1,5 +1,6 @@
 // API base URL - use relative path to work from any host
 const API_URL = '/api';
+const REQUEST_TIMEOUT_MS = 45000;
 
 // Global state
 let currentSessionId = null;
@@ -58,6 +59,8 @@ async function sendMessage() {
     const loadingMessage = createLoadingMessage();
     chatMessages.appendChild(loadingMessage);
     chatMessages.scrollTop = chatMessages.scrollHeight;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
         const response = await fetch(`${API_URL}/query`, {
@@ -65,15 +68,18 @@ async function sendMessage() {
             headers: {
                 'Content-Type': 'application/json',
             },
+            signal: controller.signal,
             body: JSON.stringify({
                 query: query,
                 session_id: currentSessionId
             })
         });
 
-        if (!response.ok) throw new Error('Query failed');
-
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            const message = data?.detail || `Query failed (${response.status})`;
+            throw new Error(message);
+        }
         
         // Update session ID if new
         if (!currentSessionId) {
@@ -85,10 +91,16 @@ async function sendMessage() {
         addMessage(data.answer, 'assistant', data.sources);
 
     } catch (error) {
+        const isTimeout = error?.name === 'AbortError';
+        const errorMessage = isTimeout
+            ? `Request timed out after ${REQUEST_TIMEOUT_MS / 1000} seconds. Please try again.`
+            : error.message;
+
         // Replace loading message with error
         loadingMessage.remove();
-        addMessage(`Error: ${error.message}`, 'assistant');
+        addMessage(`Error: ${errorMessage}`, 'assistant');
     } finally {
+        clearTimeout(timeoutId);
         chatInput.disabled = false;
         sendButton.disabled = false;
         chatInput.focus();
