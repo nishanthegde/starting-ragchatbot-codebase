@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional, Protocol
+from typing import Dict, Any, Optional
 from abc import ABC, abstractmethod
 import html
 from urllib.parse import urlparse
@@ -144,6 +144,80 @@ class CourseSearchTool(Tool):
 
     def _is_safe_http_url(self, url: Optional[str]) -> bool:
         """Allow only http/https URLs for source links."""
+        if not url:
+            return False
+
+        parsed = urlparse(url)
+        return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+class CourseOutlineTool(Tool):
+    """Tool for retrieving complete course outlines from metadata."""
+
+    def __init__(self, vector_store: VectorStore):
+        self.store = vector_store
+
+    def get_tool_definition(self) -> Dict[str, Any]:
+        """Return Anthropic tool definition for course outline retrieval."""
+        return {
+            "name": "get_course_outline",
+            "description": (
+                "Get complete course outline metadata including course title, "
+                "course link, and all lessons"
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "course_name": {
+                        "type": "string",
+                        "description": "Course title (partial matches work)",
+                    }
+                },
+                "required": ["course_name"],
+            },
+        }
+
+    def execute(self, course_name: str) -> str:
+        """Return a normalized plain-text course outline for the given course."""
+        outline = self.store.get_course_outline(course_name)
+        if not outline:
+            return f"No course outline found matching '{course_name}'."
+
+        course_title = outline.get("title", course_name)
+        course_link = outline.get("course_link") or "N/A"
+        lessons = outline.get("lessons", [])
+
+        lines = [
+            f"Course Title: {course_title}",
+            "",
+            f"Course Link: {course_link}",
+            "",
+            "Lessons:",
+        ]
+
+        if not lessons:
+            lines.append("No lessons found.")
+        else:
+            for lesson in lessons:
+                lesson_number = lesson.get("lesson_number", "N/A")
+                lesson_title = lesson.get("lesson_title", "Untitled")
+                lesson_link = lesson.get("lesson_link")
+
+                if self._is_safe_http_url(lesson_link):
+                    escaped_link = html.escape(lesson_link, quote=True)
+                    link_suffix = (
+                        f' <a href="{escaped_link}" target="_blank" '
+                        'rel="noopener noreferrer">(Link)</a>'
+                    )
+                else:
+                    link_suffix = ""
+
+                lines.append(f"- Lesson {lesson_number}: {lesson_title}{link_suffix}")
+
+        return "\n".join(lines)
+
+    def _is_safe_http_url(self, url: Optional[str]) -> bool:
+        """Allow only http/https URLs for lesson links."""
         if not url:
             return False
 

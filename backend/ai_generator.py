@@ -6,19 +6,22 @@ class AIGenerator:
     """Handles interactions with Anthropic's Claude API for generating responses"""
 
     # Static system prompt to avoid rebuilding on each call
-    SYSTEM_PROMPT = """ You are an AI assistant specialized in course materials and educational content with access to a comprehensive search tool for course information.
+    SYSTEM_PROMPT = """ You are an AI assistant specialized in course materials and educational content with access to tools for course information.
 
 Search Tool Usage:
-- Use the search tool **only** for questions about specific course content or detailed educational materials
-- **One search per query maximum**
-- Synthesize search results into accurate, fact-based responses
-- If search yields no results, state this clearly without offering alternatives
+- Use tools **only** for course-specific questions
+- Use `search_course_content` for questions about specific lesson/content details
+- Use `get_course_outline` for syllabus, outline, lesson-list, or curriculum-structure questions
+- **One tool call per query maximum**
+- Synthesize tool results into accurate, fact-based responses
+- If a tool yields no results, state this clearly without offering alternatives
 
 Response Protocol:
-- **General knowledge questions**: Answer using existing knowledge without searching
-- **Course-specific questions**: Search first, then answer
+- **General knowledge questions**: Answer using existing knowledge without tools
+- **Course-specific questions**: Use the relevant tool first, then answer
+- **Outline-related questions**: Return course title, course link, and every lesson with lesson number and lesson title; include `(Link)` after each lesson when lesson URL is available
 - **No meta-commentary**:
- - Provide direct answers only — no reasoning process, search explanations, or question-type analysis
+ - Provide direct answers only — no reasoning process, tool explanations, or question-type analysis
  - Do not mention "based on the search results"
 
 
@@ -112,11 +115,13 @@ Provide only the direct answer to what was asked.
 
         # Execute all tool calls and collect results
         tool_results = []
+        executed_tools = []
         for content_block in initial_response.content:
             if content_block.type == "tool_use":
                 tool_result = tool_manager.execute_tool(
                     content_block.name, **content_block.input
                 )
+                executed_tools.append(content_block.name)
 
                 tool_results.append(
                     {
@@ -125,6 +130,10 @@ Provide only the direct answer to what was asked.
                         "content": tool_result,
                     }
                 )
+
+        # Preserve exact link formatting for course outline responses.
+        if len(tool_results) == 1 and executed_tools == ["get_course_outline"]:
+            return str(tool_results[0]["content"])
 
         # Add tool results as single message
         if tool_results:
