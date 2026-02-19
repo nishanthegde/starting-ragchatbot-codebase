@@ -51,6 +51,19 @@ class QueryResponse(BaseModel):
     session_id: str
 
 
+class NewSessionRequest(BaseModel):
+    """Request model for creating a new session"""
+
+    previous_session_id: Optional[str] = None
+
+
+class NewSessionResponse(BaseModel):
+    """Response model for session creation"""
+
+    session_id: str
+    cleared_previous: bool
+
+
 class CourseStats(BaseModel):
     """Response model for course statistics"""
 
@@ -59,6 +72,24 @@ class CourseStats(BaseModel):
 
 
 # API Endpoints
+
+
+@app.post("/api/session/new", response_model=NewSessionResponse)
+async def create_new_session(request: NewSessionRequest):
+    """Create a new session and optionally clear a previous one"""
+    try:
+        cleared_previous = False
+        if request.previous_session_id:
+            cleared_previous = rag_system.session_manager.delete_session(
+                request.previous_session_id
+            )
+
+        session_id = rag_system.session_manager.create_session()
+        return NewSessionResponse(
+            session_id=session_id, cleared_previous=cleared_previous
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/query", response_model=QueryResponse)

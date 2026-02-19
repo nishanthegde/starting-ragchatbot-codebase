@@ -1,24 +1,32 @@
 // API base URL - use relative path to work from any host
 const API_URL = '/api';
 const REQUEST_TIMEOUT_MS = 45000;
+const WELCOME_MESSAGE =
+    'Welcome to the Course Materials Assistant! I can help you with questions about courses, lessons and specific content. What would you like to know?';
 
 // Global state
 let currentSessionId = null;
+let activeAbortController = null;
+let activeTimeoutId = null;
+let activeLoadingMessage = null;
+let requestEpoch = 0;
+let isResettingSession = false;
 
 // DOM elements
-let chatMessages, chatInput, sendButton, totalCourses, courseTitles;
+let chatMessages, chatInput, sendButton, newChatButton, totalCourses, courseTitles;
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     // Get DOM elements after page loads
     chatMessages = document.getElementById('chatMessages');
     chatInput = document.getElementById('chatInput');
     sendButton = document.getElementById('sendButton');
+    newChatButton = document.getElementById('newChatButton');
     totalCourses = document.getElementById('totalCourses');
     courseTitles = document.getElementById('courseTitles');
-    
+
     setupEventListeners();
-    createNewSession();
+    await createNewSession();
     loadCourseStats();
 });
 
@@ -29,8 +37,11 @@ function setupEventListeners() {
     chatInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
     });
-    
-    
+
+    if (newChatButton) {
+        newChatButton.addEventListener('click', createNewSession);
+    }
+
     // Suggested questions
     document.querySelectorAll('.suggested-item').forEach(button => {
         button.addEventListener('click', (e) => {
@@ -45,22 +56,29 @@ function setupEventListeners() {
 // Chat Functions
 async function sendMessage() {
     const query = chatInput.value.trim();
-    if (!query) return;
+    if (!query || chatInput.disabled || isResettingSession) return;
+
+    const localRequestEpoch = ++requestEpoch;
 
     // Disable input
     chatInput.value = '';
-    chatInput.disabled = true;
-    sendButton.disabled = true;
+    setInputDisabled(true);
 
     // Add user message
     addMessage(query, 'user');
 
-    // Add loading message - create a unique container for it
-    const loadingMessage = createLoadingMessage();
-    chatMessages.appendChild(loadingMessage);
+    // Add loading message
+    activeLoadingMessage = createLoadingMessage();
+    chatMessages.appendChild(activeLoadingMessage);
     chatMessages.scrollTop = chatMessages.scrollHeight;
+
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    activeAbortController = controller;
+    let timedOut = false;
+    activeTimeoutId = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+    }, REQUEST_TIMEOUT_MS);
 
     try {
         const response = await fetch(`${API_URL}/query`, {
@@ -75,6 +93,10 @@ async function sendMessage() {
             })
         });
 
+        if (localRequestEpoch !== requestEpoch) {
+            return;
+        }
+
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
             const message = data?.detail || `Query failed (${response.status})`;
@@ -86,23 +108,38 @@ async function sendMessage() {
             currentSessionId = data.session_id;
         }
 
-        // Replace loading message with response
-        loadingMessage.remove();
+        removeActiveLoadingMessage();
         addMessage(data.answer, 'assistant', data.sources);
 
     } catch (error) {
+        if (localRequestEpoch !== requestEpoch) {
+            return;
+        }
+
         const isTimeout = error?.name === 'AbortError';
+        if (isTimeout && !timedOut) {
+            return;
+        }
+
         const errorMessage = isTimeout
             ? `Request timed out after ${REQUEST_TIMEOUT_MS / 1000} seconds. Please try again.`
             : error.message;
 
-        // Replace loading message with error
-        loadingMessage.remove();
+        removeActiveLoadingMessage();
         addMessage(`Error: ${errorMessage}`, 'assistant');
     } finally {
-        clearTimeout(timeoutId);
-        chatInput.disabled = false;
-        sendButton.disabled = false;
+        clearActiveTimeout();
+
+        if (activeAbortController === controller) {
+            activeAbortController = null;
+        }
+
+        if (localRequestEpoch !== requestEpoch) {
+            return;
+        }
+
+        removeActiveLoadingMessage();
+        setInputDisabled(false);
         chatInput.focus();
     }
 }
@@ -134,10 +171,14 @@ function addMessage(content, type, sources = null, isWelcome = false) {
     let html = `<div class="message-content">${displayContent}</div>`;
     
     if (sources && sources.length > 0) {
+        const sourceItems = sources
+            .map(source => `<span class="source-item">${source}</span>`)
+            .join('');
+
         html += `
             <details class="sources-collapsible">
                 <summary class="sources-header">Sources</summary>
-                <div class="sources-content">${sources.join(', ')}</div>
+                <div class="sources-content">${sourceItems}</div>
             </details>
         `;
     }
@@ -156,12 +197,95 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// Removed removeMessage function - no longer needed since we handle loading differently
-
 async function createNewSession() {
+    if (isResettingSession) {
+        return;
+    }
+
+    isResettingSession = true;
+    if (newChatButton) {
+        newChatButton.disabled = true;
+    }
+
+    const previousSessionId = currentSessionId;
+    cancelInFlightRequest();
     currentSessionId = null;
+
+    try {
+        const newSessionData = await requestNewSession(previousSessionId);
+        currentSessionId = newSessionData.session_id;
+    } catch (error) {
+        console.error('Error creating new session:', error);
+    } finally {
+        setInputDisabled(false);
+        if (newChatButton) {
+            newChatButton.disabled = false;
+        }
+        isResettingSession = false;
+    }
+
     chatMessages.innerHTML = '';
-    addMessage('Welcome to the Course Materials Assistant! I can help you with questions about courses, lessons and specific content. What would you like to know?', 'assistant', null, true);
+    addMessage(WELCOME_MESSAGE, 'assistant', null, true);
+    chatInput.focus();
+}
+
+async function requestNewSession(previousSessionId) {
+    const body = {};
+    if (previousSessionId) {
+        body.previous_session_id = previousSessionId;
+    }
+
+    const response = await fetch(`${API_URL}/session/new`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        const message = data?.detail || `Session reset failed (${response.status})`;
+        throw new Error(message);
+    }
+
+    if (!data?.session_id) {
+        throw new Error('Session reset failed: missing session ID');
+    }
+
+    return data;
+}
+
+function cancelInFlightRequest() {
+    requestEpoch += 1;
+
+    if (activeAbortController) {
+        activeAbortController.abort();
+        activeAbortController = null;
+    }
+
+    clearActiveTimeout();
+    removeActiveLoadingMessage();
+    setInputDisabled(false);
+}
+
+function clearActiveTimeout() {
+    if (activeTimeoutId !== null) {
+        clearTimeout(activeTimeoutId);
+        activeTimeoutId = null;
+    }
+}
+
+function removeActiveLoadingMessage() {
+    if (activeLoadingMessage) {
+        activeLoadingMessage.remove();
+        activeLoadingMessage = null;
+    }
+}
+
+function setInputDisabled(disabled) {
+    chatInput.disabled = disabled;
+    sendButton.disabled = disabled;
 }
 
 // Load course statistics
