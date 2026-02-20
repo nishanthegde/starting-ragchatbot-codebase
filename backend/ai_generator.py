@@ -1,9 +1,12 @@
 import anthropic
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 
 
 class AIGenerator:
     """Handles interactions with Anthropic's Claude API for generating responses"""
+
+    MAX_TOOL_ROUNDS = 2
+    TOOL_FAILURE_FALLBACK = "I hit a retrieval issue while processing that request."
 
     # Static system prompt to avoid rebuilding on each call
     SYSTEM_PROMPT = """ You are an AI assistant specialized in course materials and educational content with access to tools for course information.
@@ -12,9 +15,10 @@ Search Tool Usage:
 - Use tools **only** for course-specific questions
 - Use `search_course_content` for questions about specific lesson/content details
 - Use `get_course_outline` for syllabus, outline, lesson-list, or curriculum-structure questions
-- **One tool call per query maximum**
+- Use at most one tool call per round, with up to 2 rounds total when needed
 - Synthesize tool results into accurate, fact-based responses
 - If a tool yields no results, state this clearly without offering alternatives
+- After using tools, provide a final direct answer to the user's question
 
 Response Protocol:
 - **General knowledge questions**: Answer using existing knowledge without tools
@@ -71,81 +75,68 @@ Provide only the direct answer to what was asked.
             else self.SYSTEM_PROMPT
         )
 
-        # Prepare API call parameters efficiently
+        messages = [{"role": "user", "content": query}]
+        tools_enabled = bool(tools and tool_manager)
+
+        if not tools_enabled:
+            response = self._create_response(messages, system_content)
+            return self._extract_text_response(response)
+
+        completed_tool_rounds = 0
+        while completed_tool_rounds < self.MAX_TOOL_ROUNDS:
+            response = self._create_response(messages, system_content, tools)
+            tool_calls = [
+                block
+                for block in response.content
+                if getattr(block, "type", None) == "tool_use"
+            ]
+
+            if not tool_calls:
+                return self._extract_text_response(response)
+
+            messages.append({"role": "assistant", "content": response.content})
+
+            try:
+                tool_results = self._execute_tool_calls(tool_calls, tool_manager)
+            except Exception:
+                return self.TOOL_FAILURE_FALLBACK
+
+            messages.append({"role": "user", "content": tool_results})
+            completed_tool_rounds += 1
+
+        final_response = self._create_response(messages, system_content)
+        return self._extract_text_response(final_response)
+
+    def _create_response(
+        self, messages, system_content: str, tools: Optional[List] = None
+    ):
         api_params = {
             **self.base_params,
-            "messages": [{"role": "user", "content": query}],
+            "messages": messages,
             "system": system_content,
         }
 
-        # Add tools if available
         if tools:
             api_params["tools"] = tools
             api_params["tool_choice"] = {"type": "auto"}
 
-        # Get response from Claude
-        response = self.client.messages.create(**api_params)
+        return self.client.messages.create(**api_params)
 
-        # Handle tool execution if needed
-        if response.stop_reason == "tool_use" and tool_manager:
-            return self._handle_tool_execution(response, api_params, tool_manager)
-
-        # Return direct response
-        return response.content[0].text
-
-    def _handle_tool_execution(
-        self, initial_response, base_params: Dict[str, Any], tool_manager
-    ):
-        """
-        Handle execution of tool calls and get follow-up response.
-
-        Args:
-            initial_response: The response containing tool use requests
-            base_params: Base API parameters
-            tool_manager: Manager to execute tools
-
-        Returns:
-            Final response text after tool execution
-        """
-        # Start with existing messages
-        messages = base_params["messages"].copy()
-
-        # Add AI's tool use response
-        messages.append({"role": "assistant", "content": initial_response.content})
-
-        # Execute all tool calls and collect results
+    def _execute_tool_calls(self, tool_calls, tool_manager):
         tool_results = []
-        executed_tools = []
-        for content_block in initial_response.content:
-            if content_block.type == "tool_use":
-                tool_result = tool_manager.execute_tool(
-                    content_block.name, **content_block.input
-                )
-                executed_tools.append(content_block.name)
+        for tool_call in tool_calls:
+            tool_result = tool_manager.execute_tool(tool_call.name, **tool_call.input)
+            tool_results.append(
+                {
+                    "type": "tool_result",
+                    "tool_use_id": tool_call.id,
+                    "content": tool_result,
+                }
+            )
+        return tool_results
 
-                tool_results.append(
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": content_block.id,
-                        "content": tool_result,
-                    }
-                )
-
-        # Preserve exact link formatting for course outline responses.
-        if len(tool_results) == 1 and executed_tools == ["get_course_outline"]:
-            return str(tool_results[0]["content"])
-
-        # Add tool results as single message
-        if tool_results:
-            messages.append({"role": "user", "content": tool_results})
-
-        # Prepare final API call without tools
-        final_params = {
-            **self.base_params,
-            "messages": messages,
-            "system": base_params["system"],
-        }
-
-        # Get final response
-        final_response = self.client.messages.create(**final_params)
-        return final_response.content[0].text
+    def _extract_text_response(self, response) -> str:
+        for content_block in response.content:
+            if getattr(content_block, "type", None) == "text":
+                return content_block.text
+        return ""
