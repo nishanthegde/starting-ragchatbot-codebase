@@ -3,16 +3,16 @@ import warnings
 warnings.filterwarnings("ignore", message="resource_tracker: There appear to be.*")
 
 import asyncio
+import os
+from typing import List, Optional
+
 import anthropic
+from config import config
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from typing import List, Optional
-import os
-
-from config import config
 from rag_system import RAGSystem
 
 # Initialize FastAPI app
@@ -157,10 +157,8 @@ async def startup_event():
 
 
 # Custom static file handler with no-cache headers for development
-from fastapi.staticfiles import StaticFiles
+
 from fastapi.responses import FileResponse
-import os
-from pathlib import Path
 
 
 class DevStaticFiles(StaticFiles):

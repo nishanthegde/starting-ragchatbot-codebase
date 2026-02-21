@@ -1,8 +1,9 @@
-from typing import Dict, Any, Optional
-from abc import ABC, abstractmethod
 import html
+from abc import ABC, abstractmethod
+from typing import Any, Dict, Optional
 from urllib.parse import urlparse
-from vector_store import VectorStore, SearchResults
+
+from vector_store import SearchResults, VectorStore
 
 
 class Tool(ABC):

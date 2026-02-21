@@ -1,5 +1,6 @@
-import anthropic
 from typing import List, Optional
+
+import anthropic
 
 
 class AIGenerator:

@@ -47,9 +47,7 @@ def test_execute_returns_filtered_no_results_message():
     )
     tool = CourseSearchTool(store)
 
-    result = tool.execute(
-        query="What is batching?", course_name="MCP", lesson_number=2
-    )
+    result = tool.execute(query="What is batching?", course_name="MCP", lesson_number=2)
 
     assert result == "No relevant content found in course 'MCP' in lesson 2."
     assert store.search_calls == [
