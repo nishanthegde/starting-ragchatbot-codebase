@@ -1,6 +1,9 @@
 // API base URL - use relative path to work from any host
 const API_URL = '/api';
 const REQUEST_TIMEOUT_MS = 45000;
+const THEME_STORAGE_KEY = 'course-assistant-theme';
+const DARK_THEME = 'dark';
+const LIGHT_THEME = 'light';
 const WELCOME_MESSAGE =
     'Welcome to the Course Materials Assistant! I can help you with questions about courses, lessons and specific content. What would you like to know?';
 
@@ -13,7 +16,7 @@ let requestEpoch = 0;
 let isResettingSession = false;
 
 // DOM elements
-let chatMessages, chatInput, sendButton, newChatButton, totalCourses, courseTitles;
+let chatMessages, chatInput, sendButton, newChatButton, totalCourses, courseTitles, themeToggle;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
@@ -24,7 +27,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     newChatButton = document.getElementById('newChatButton');
     totalCourses = document.getElementById('totalCourses');
     courseTitles = document.getElementById('courseTitles');
+    themeToggle = document.getElementById('themeToggle');
 
+    setupThemeToggle();
     setupEventListeners();
     await createNewSession();
     loadCourseStats();
@@ -50,6 +55,55 @@ function setupEventListeners() {
             sendMessage();
         });
     });
+}
+
+function setupThemeToggle() {
+    if (!themeToggle) {
+        return;
+    }
+
+    let savedTheme = null;
+    try {
+        savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+    } catch (_error) {
+        savedTheme = null;
+    }
+    const initialTheme = savedTheme === LIGHT_THEME ? LIGHT_THEME : DARK_THEME;
+    applyTheme(initialTheme);
+
+    themeToggle.addEventListener('click', () => {
+        const currentTheme = document.body.dataset.theme || DARK_THEME;
+        const nextTheme = currentTheme === LIGHT_THEME ? DARK_THEME : LIGHT_THEME;
+
+        applyTheme(nextTheme);
+        try {
+            localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+        } catch (_error) {
+            // Persisting theme is optional; keep UI responsive even if storage is blocked.
+        }
+    });
+
+    themeToggle.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            themeToggle.click();
+        }
+    });
+}
+
+function applyTheme(theme) {
+    document.body.dataset.theme = theme;
+
+    if (!themeToggle) {
+        return;
+    }
+
+    const isLightMode = theme === LIGHT_THEME;
+    themeToggle.setAttribute('aria-pressed', String(isLightMode));
+    themeToggle.setAttribute(
+        'aria-label',
+        isLightMode ? 'Switch to dark mode' : 'Switch to light mode'
+    );
 }
 
 
