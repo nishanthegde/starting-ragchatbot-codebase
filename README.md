@@ -54,3 +54,23 @@ The application will be available at:
 - Web Interface: `http://localhost:8000`
 - API Documentation: `http://localhost:8000/docs`
 
+## Development Quality Workflow
+
+Run code quality commands through the provided `Makefile` targets:
+
+```bash
+make format        # Auto-format Python code (black + ruff --fix)
+make format-check  # Verify formatting and lint rules
+make lint          # Run ruff lint checks
+make test          # Run pytest
+make quality       # Run format-check + tests
+```
+
+Install and run pre-commit hooks to automatically format and lint on commit:
+
+```bash
+uv sync --group dev
+make hooks-install
+make hooks-run
+```
+

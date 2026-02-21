@@ -1,11 +1,12 @@
-from typing import List, Tuple, Optional, Dict
 import os
-from document_processor import DocumentProcessor
-from vector_store import VectorStore
+from typing import Dict, List, Optional, Tuple
+
 from ai_generator import AIGenerator
+from document_processor import DocumentProcessor
+from models import Course
+from search_tools import CourseOutlineTool, CourseSearchTool, ToolManager
 from session_manager import SessionManager
-from search_tools import ToolManager, CourseSearchTool, CourseOutlineTool
-from models import Course, Lesson, CourseChunk
+from vector_store import VectorStore
 
 
 class RAGSystem:
