@@ -1,6 +1,8 @@
 // API base URL - use relative path to work from any host
 const API_URL = '/api';
 const REQUEST_TIMEOUT_MS = 45000;
+const THEME_STORAGE_KEY = 'course-assistant-theme';
+const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 const WELCOME_MESSAGE =
     'Welcome to the Course Materials Assistant! I can help you with questions about courses, lessons and specific content. What would you like to know?';
 
@@ -13,7 +15,7 @@ let requestEpoch = 0;
 let isResettingSession = false;
 
 // DOM elements
-let chatMessages, chatInput, sendButton, newChatButton, totalCourses, courseTitles;
+let chatMessages, chatInput, sendButton, newChatButton, totalCourses, courseTitles, themeToggleButton;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
@@ -24,7 +26,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     newChatButton = document.getElementById('newChatButton');
     totalCourses = document.getElementById('totalCourses');
     courseTitles = document.getElementById('courseTitles');
+    themeToggleButton = document.getElementById('themeToggle');
 
+    initializeTheme();
     setupEventListeners();
     await createNewSession();
     loadCourseStats();
@@ -42,6 +46,10 @@ function setupEventListeners() {
         newChatButton.addEventListener('click', createNewSession);
     }
 
+    if (themeToggleButton) {
+        themeToggleButton.addEventListener('click', toggleTheme);
+    }
+
     // Suggested questions
     document.querySelectorAll('.suggested-item').forEach(button => {
         button.addEventListener('click', (e) => {
@@ -50,6 +58,69 @@ function setupEventListeners() {
             sendMessage();
         });
     });
+}
+
+function initializeTheme() {
+    const storedTheme = getStoredTheme();
+    const prefersLight =
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(prefers-color-scheme: light)').matches;
+    const initialTheme = storedTheme || (prefersLight ? 'light' : 'dark');
+    applyTheme(initialTheme);
+}
+
+function toggleTheme() {
+    const currentTheme = document.body.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    const nextTheme = currentTheme === 'light' ? 'dark' : 'light';
+    applyThemeWithTransition(nextTheme);
+}
+
+function applyThemeWithTransition(theme) {
+    const supportsViewTransitions = typeof document.startViewTransition === 'function';
+    const prefersReducedMotion =
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia(REDUCED_MOTION_QUERY).matches;
+
+    if (!supportsViewTransitions || prefersReducedMotion) {
+        applyTheme(theme);
+        return;
+    }
+
+    try {
+        document.startViewTransition(() => applyTheme(theme));
+    } catch (error) {
+        console.warn('Unable to run view transition, falling back:', error);
+        applyTheme(theme);
+    }
+}
+
+function applyTheme(theme) {
+    const isLightTheme = theme === 'light';
+    const label = isLightTheme ? 'Switch to dark theme' : 'Switch to light theme';
+
+    document.body.setAttribute('data-theme', isLightTheme ? 'light' : 'dark');
+
+    if (themeToggleButton) {
+        themeToggleButton.setAttribute('aria-pressed', String(isLightTheme));
+        themeToggleButton.setAttribute('aria-label', label);
+        themeToggleButton.setAttribute('title', label);
+    }
+
+    try {
+        localStorage.setItem(THEME_STORAGE_KEY, isLightTheme ? 'light' : 'dark');
+    } catch (error) {
+        console.warn('Unable to persist theme preference:', error);
+    }
+}
+
+function getStoredTheme() {
+    try {
+        const theme = localStorage.getItem(THEME_STORAGE_KEY);
+        return theme === 'light' || theme === 'dark' ? theme : null;
+    } catch (error) {
+        console.warn('Unable to access stored theme preference:', error);
+        return null;
+    }
 }
 
 
