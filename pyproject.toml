@@ -19,3 +19,8 @@ dev = [
     "black>=26.1.0",
     "pytest>=9.0.2",
 ]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]
