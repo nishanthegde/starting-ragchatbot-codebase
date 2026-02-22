@@ -1,5 +1,24 @@
 # Frontend Changes
 
+## 2026-02-21 - Theme Toggle Placement Update
+
+### What was added/changed
+- Moved the theme toggle button from the fixed top-right overlay into the left sidebar.
+- Placed the toggle in the same row as `NEW CHAT`, so it lives in the sidebar panel and scrolls with sidebar content.
+- Updated toggle sizing/layout styles for inline sidebar placement and responsive behavior.
+
+### Files touched
+- `frontend/index.html`
+- `frontend/style.css`
+- `frontend-changes.md`
+
+### New dependencies
+- None.
+
+### Assumptions
+- The request was to keep the existing theme-toggle behavior unchanged, while only changing placement and layout.
+- No frontend build/check command is configured for this static UI, so verification was done by code inspection and diff review.
+
 ## What was added/changed
 - Added an accessible icon-based theme toggle button (`sun`/`moon`) in the top-right corner of the UI.
 - Implemented light/dark theme switching with smooth icon transitions and subtle theme color transitions.

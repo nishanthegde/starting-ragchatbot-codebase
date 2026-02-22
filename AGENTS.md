@@ -52,3 +52,8 @@ Current history uses short, lowercase summaries (e.g., `added lab files`).
 - One logical change per commit.
 - PRs should include: purpose, key files changed, manual verification steps, and screenshots for UI changes.
 - Link related issues/tasks when available and note any `.env` or data assumptions.
+
+## Review guidelines
+
+- Don't log PII.
+- Verify that authentication middleware wraps every route.
