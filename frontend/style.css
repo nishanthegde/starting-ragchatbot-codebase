@@ -115,11 +115,9 @@ body[data-theme="light"] {
 }
 
 .theme-toggle {
-  position: fixed;
-  top: 1rem;
-  right: 1rem;
-  width: 52px;
-  height: 52px;
+  position: relative;
+  width: 42px;
+  height: 42px;
   border: 1px solid var(--toggle-border);
   border-radius: 999px;
   background: var(--toggle-bg);
@@ -129,7 +127,7 @@ body[data-theme="light"] {
   place-items: center;
   box-shadow: var(--shadow);
   backdrop-filter: blur(8px);
-  z-index: 1100;
+  flex-shrink: 0;
   transition:
     background-color 0.3s ease,
     border-color 0.3s ease,
@@ -276,12 +274,19 @@ header h1 {
   margin-bottom: 0;
 }
 
+.sidebar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 /* Main Chat Area */
 .chat-main {
   flex: 1;
   display: flex;
   justify-content: center;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 0;
   background: var(--background);
 }
@@ -292,16 +297,17 @@ header h1 {
   display: flex;
   flex-direction: column;
   background: var(--background);
-  overflow: hidden;
+  overflow: visible;
   width: 100%;
   max-width: 800px;
+  min-height: 100%;
   margin: 0;
 }
 
 /* Chat Messages */
 .chat-messages {
   flex: 1;
-  overflow-y: auto;
+  overflow-y: visible;
   padding: 2rem;
   display: flex;
   flex-direction: column;
@@ -310,20 +316,20 @@ header h1 {
 }
 
 /* Custom Scrollbar */
-.chat-messages::-webkit-scrollbar {
+.chat-main::-webkit-scrollbar {
   width: 8px;
 }
 
-.chat-messages::-webkit-scrollbar-track {
+.chat-main::-webkit-scrollbar-track {
   background: var(--surface);
 }
 
-.chat-messages::-webkit-scrollbar-thumb {
+.chat-main::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: 4px;
 }
 
-.chat-messages::-webkit-scrollbar-thumb:hover {
+.chat-main::-webkit-scrollbar-thumb:hover {
   background: var(--text-secondary);
 }
 
@@ -523,6 +529,16 @@ body[data-theme="light"] .source-item a:hover {
 .message-content p {
   margin: 0.5rem 0;
   line-height: 1.6;
+}
+
+.message-content a,
+.message-content a:link,
+.message-content a:visited {
+  color: var(--primary-color);
+}
+
+.message-content a:hover {
+  color: var(--primary-hover);
 }
 
 .message-content ul,
@@ -738,6 +754,11 @@ body[data-theme="light"] .source-item a:hover {
   background: none;
 }
 
+.sidebar-actions .new-chat-button {
+  flex: 1;
+  width: auto;
+}
+
 .stats-header:focus,
 .suggested-header:focus,
 .new-chat-button:focus {
@@ -933,10 +954,8 @@ details[open] .suggested-header::before {
 /* Responsive Design */
 @media (max-width: 768px) {
   .theme-toggle {
-    top: 0.75rem;
-    right: 0.75rem;
-    width: 46px;
-    height: 46px;
+    width: 40px;
+    height: 40px;
   }
 
   .main-content {

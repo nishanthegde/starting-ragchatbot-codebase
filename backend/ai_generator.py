@@ -102,6 +102,11 @@ Provide only the direct answer to what was asked.
             except Exception:
                 return self.TOOL_FAILURE_FALLBACK
 
+            # Preserve exact anchor tags emitted by the outline tool so lesson
+            # "(Link)" URLs remain clickable and open in new tabs.
+            if len(tool_calls) == 1 and tool_calls[0].name == "get_course_outline":
+                return str(tool_results[0]["content"])
+
             messages.append({"role": "user", "content": tool_results})
             completed_tool_rounds += 1
 

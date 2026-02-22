@@ -67,10 +67,10 @@ def build_text_response(text: str):
 
 def test_generate_response_allows_two_sequential_tool_rounds_then_final_answer():
     first_round_response = build_tool_use_response(
-        "get_course_outline", {"course_name": "Course X"}, "toolu_1"
+        "search_course_content", {"query": "lesson 4 topic in Course X"}, "toolu_1"
     )
     second_round_response = build_tool_use_response(
-        "search_course_content", {"query": "lesson 4 topic"}, "toolu_2"
+        "search_course_content", {"query": "related courses for topic"}, "toolu_2"
     )
     final_response = build_text_response(
         "Course Y discusses the same topic as lesson 4."
@@ -81,11 +81,6 @@ def test_generate_response_allows_two_sequential_tool_rounds_then_final_answer()
     )
     tool_manager = StubToolManager()
     tools = [
-        {
-            "name": "get_course_outline",
-            "description": "Get course outline",
-            "input_schema": {"type": "object"},
-        },
         {
             "name": "search_course_content",
             "description": "Search content",
@@ -101,8 +96,8 @@ def test_generate_response_allows_two_sequential_tool_rounds_then_final_answer()
 
     assert response_text == "Course Y discusses the same topic as lesson 4."
     assert tool_manager.calls == [
-        ("get_course_outline", {"course_name": "Course X"}),
-        ("search_course_content", {"query": "lesson 4 topic"}),
+        ("search_course_content", {"query": "lesson 4 topic in Course X"}),
+        ("search_course_content", {"query": "related courses for topic"}),
     ]
 
     first_call, second_call, third_call = generator.client.messages.calls
@@ -145,6 +140,38 @@ def test_generate_response_stops_when_round_response_has_no_tool_use():
     ]
     assert len(generator.client.messages.calls) == 2
     assert generator.client.messages.calls[1]["tools"] == tools
+
+
+def test_generate_response_returns_outline_tool_result_without_link_rewrite():
+    first_round_response = build_tool_use_response(
+        "get_course_outline", {"course_name": "MCP"}, "toolu_outline"
+    )
+    generator = build_generator_with_stub_client([first_round_response])
+
+    class OutlineToolManager(StubToolManager):
+        def execute_tool(self, tool_name: str, **kwargs):
+            self.calls.append((tool_name, kwargs))
+            return (
+                "Lesson 1: Intro "
+                '<a href="https://example.com/lesson-1" target="_blank" '
+                'rel="noopener noreferrer">(Link)</a>'
+            )
+
+    tool_manager = OutlineToolManager()
+
+    response_text = generator.generate_response(
+        query="Show me the MCP outline.",
+        tools=[{"name": "get_course_outline", "input_schema": {"type": "object"}}],
+        tool_manager=tool_manager,
+    )
+
+    assert response_text == (
+        "Lesson 1: Intro "
+        '<a href="https://example.com/lesson-1" target="_blank" '
+        'rel="noopener noreferrer">(Link)</a>'
+    )
+    assert tool_manager.calls == [("get_course_outline", {"course_name": "MCP"})]
+    assert len(generator.client.messages.calls) == 1
 
 
 def test_generate_response_stops_on_tool_failure_with_fallback():

@@ -15,11 +15,12 @@ let requestEpoch = 0;
 let isResettingSession = false;
 
 // DOM elements
-let chatMessages, chatInput, sendButton, newChatButton, totalCourses, courseTitles, themeToggleButton;
+let chatMain, chatMessages, chatInput, sendButton, newChatButton, totalCourses, courseTitles, themeToggleButton;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
     // Get DOM elements after page loads
+    chatMain = document.querySelector('.chat-main');
     chatMessages = document.getElementById('chatMessages');
     chatInput = document.getElementById('chatInput');
     sendButton = document.getElementById('sendButton');
@@ -141,7 +142,7 @@ async function sendMessage() {
     // Add loading message
     activeLoadingMessage = createLoadingMessage();
     chatMessages.appendChild(activeLoadingMessage);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+    scrollChatPaneToBottom();
 
     const controller = new AbortController();
     activeAbortController = controller;
@@ -256,7 +257,7 @@ function addMessage(content, type, sources = null, isWelcome = false) {
     
     messageDiv.innerHTML = html;
     chatMessages.appendChild(messageDiv);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+    scrollChatPaneToBottom();
     
     return messageId;
 }
@@ -352,6 +353,14 @@ function removeActiveLoadingMessage() {
         activeLoadingMessage.remove();
         activeLoadingMessage = null;
     }
+}
+
+function scrollChatPaneToBottom() {
+    const scrollContainer = chatMain || chatMessages;
+    if (!scrollContainer) {
+        return;
+    }
+    scrollContainer.scrollTop = scrollContainer.scrollHeight;
 }
 
 function setInputDisabled(disabled) {
