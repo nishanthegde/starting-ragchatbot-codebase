@@ -185,13 +185,22 @@ class CourseOutlineTool(Tool):
             return f"No course outline found matching '{course_name}'."
 
         course_title = outline.get("title", course_name)
-        course_link = outline.get("course_link") or "N/A"
+        course_link = outline.get("course_link")
         lessons = outline.get("lessons", [])
+        course_link_line = "Course Link: N/A"
+
+        if self._is_safe_http_url(course_link):
+            escaped_course_link = html.escape(course_link, quote=True)
+            course_link_line = (
+                "Course Link: "
+                f'<a href="{escaped_course_link}" target="_blank" '
+                f'rel="noopener noreferrer">{escaped_course_link}</a>'
+            )
 
         lines = [
             f"Course Title: {course_title}",
             "",
-            f"Course Link: {course_link}",
+            course_link_line,
             "",
             "Lessons:",
         ]
